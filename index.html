@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visualizador de Ventas Diarias</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --line: #d9deea;
+      --text: #1e2430;
+      --muted: #677086;
+      --accent: #1f6feb;
+      --accent-2: #eaf2ff;
+      --warn: #ad6700;
+      --bad: #b42318;
+      --ok: #027a48;
+      --shadow: 0 10px 30px rgba(16, 24, 40, 0.08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 1800px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #ffffff 0%, #eef4ff 100%);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      padding: 20px 22px;
+      margin-bottom: 18px;
+    }
+
+    .header h1 {
+      margin: 0 0 8px 0;
+      font-size: 28px;
+    }
+
+    .header p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .banner {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #fff7e6;
+      border: 1px solid #f7d79e;
+      color: #7a4e00;
+      font-size: 14px;
+    }
+
+    .top-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      min-width: 0;
+    }
+
+    .card h2, .card h3 {
+      margin: 0 0 12px 0;
+      font-size: 17px;
+    }
+
+    .controls-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field label, .section-label {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    input[type="file"], select, input[type="text"], input[type="number"], textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+      background: white;
+      color: var(--text);
+    }
+
+    select[multiple] {
+      min-height: 160px;
+      padding: 8px;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      border-color: #bfc9dc;
+    }
+
+    button.primary {
+      background: var(--accent);
+      color: white;
+      border-color: var(--accent);
+    }
+
+    button.ghost {
+      background: var(--accent-2);
+      border-color: #c9dbff;
+      color: #164ea6;
+    }
+
+    button.warn {
+      color: var(--bad);
+      border-color: #f1c5c4;
+      background: #fff4f4;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .checks {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .checks label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: #fbfcfe;
+    }
+
+    .stat .label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .stat .value {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .status {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--muted);
+      min-height: 20px;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 380px;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .sidebar-section + .sidebar-section {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .mini-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .dow-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 14px;
+      margin-top: 10px;
+    }
+
+    .dow-grid label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .plot-card {
+      padding-bottom: 10px;
+    }
+
+    .plot-wrap {
+      position: relative;
+      height: 360px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: white;
+      max-height: 520px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 9px 10px;
+      border-bottom: 1px solid #edf0f6;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8faff;
+      z-index: 1;
+      font-weight: 700;
+    }
+
+    tr.total-row td {
+      font-weight: 700;
+      background: #f7fbff;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .small {
+      font-size: 12px;
+    }
+
+    .mapping-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0 8px;
+    }
+
+    .mapping-table th {
+      position: static;
+      background: transparent;
+      padding: 0 4px 4px 4px;
+      border-bottom: none;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .mapping-table td {
+      border: none;
+      padding: 0 4px;
+    }
+
+    .mapping-table input {
+      width: 100%;
+    }
+
+    .mapping-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 10px 0 14px;
+    }
+
+    .list-box {
+      min-height: 110px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: #fbfcfe;
+      overflow: auto;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .pill {
+      display: inline-flex;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: #18489b;
+      font-size: 12px;
+      margin: 3px 4px 0 0;
+    }
+
+    .ok { color: var(--ok); }
+    .bad { color: var(--bad); }
+
+    .footer-note {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 1280px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+      .top-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>Visualizador de Ventas Diarias</h1>
+      <p>
+        Versión HTML del tab <strong>Ventas diarias</strong>. Permite cargar uno o más Excel,
+        aplicar una configuración diaria <strong>Categoria ⇄ Grupo para excel + Peso</strong>,
+        filtrar por sucursal, año, mes y día de semana, y ver gráfico más tabla sin usar MATLAB.
+      </p>
+      <div class="banner">
+        Esta versión usa librerías desde CDN para leer Excel y dibujar el gráfico. Si luego la quieres 100% offline,
+        se puede hacer una segunda versión empaquetada.
+      </div>
+    </div>
+
+    <div class="top-grid">
+      <div class="card">
+        <h2>Datos</h2>
+        <div class="field">
+          <label for="excelFiles">Excel(s)</label>
+          <input id="excelFiles" type="file" accept=".xls,.xlsx" multiple />
+        </div>
+        <div class="button-row">
+          <button id="clearAllBtn" class="warn">Limpiar todo</button>
+          <button id="downloadCsvBtn">Descargar tabla CSV</button>
+        </div>
+        <div class="checks">
+          <label><input id="dedupChk" type="checkbox" /> Eliminar duplicadas</label>
+          <label><input id="baseChk" type="checkbox" checked /> Sin filtros (gris atrás)</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Filtros generales</h2>
+        <div class="controls-row">
+          <div class="field">
+            <label for="metricSel">Métrica</label>
+            <select id="metricSel">
+              <option>Monto</option>
+              <option>Items</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Sucursales</label>
+            <div class="mini-row" style="margin-top:0;">
+              <button id="branchesAllBtn">Todas</button>
+              <button id="branchesNoneBtn">Ninguna</button>
+            </div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:10px;">
+          <select id="branchList" multiple></select>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Resumen</h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="label">Archivos</div>
+            <div class="value" id="filesCount">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Filas válidas</div>
+            <div class="value" id="rowsCount">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Total selección</div>
+            <div class="value" id="totalValue">—</div>
+          </div>
+        </div>
+        <div class="status" id="statusLine">Carga uno o más Excel para comenzar.</div>
+      </div>
+    </div>
+
+    <div class="main-grid">
+      <div class="card">
+        <div class="sidebar-section">
+          <h3>Categorías (Diario)</h3>
+          <select id="categoryList" multiple></select>
+          <div class="mini-row">
+            <button id="catsAllBtn">Todas</button>
+            <button id="catsNoneBtn">Ninguna</button>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>Periodo</h3>
+          <div class="field">
+            <label for="yearSel">Año</label>
+            <select id="yearSel"></select>
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <label for="monthSel">Mes</label>
+            <select id="monthSel"></select>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>Días de semana</h3>
+          <div class="dow-grid" id="dowGrid"></div>
+          <div class="mini-row">
+            <button id="dowAllBtn">Todos</button>
+            <button id="dowNoneBtn">Ninguno</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card plot-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+            <h2 style="margin:0;">Ventas diarias</h2>
+            <div class="muted small" id="plotSubtitle">Sin datos</div>
+          </div>
+          <div class="plot-wrap">
+            <canvas id="dailyChart"></canvas>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+            <h2 style="margin:0;">Tabla diaria</h2>
+            <div class="muted small">Incluye fila TOTAL al final</div>
+          </div>
+          <div class="table-wrap">
+            <table id="dailyTable"></table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Configuración diario</h2>
+        <div class="button-row">
+          <button id="loadPresetBtn">Cargar preset diario...</button>
+          <button id="savePresetBtn">Guardar preset diario...</button>
+          <button id="applyMappingBtn" class="primary">Aplicar cambios</button>
+        </div>
+        <input id="presetFileInput" type="file" accept=".txt" style="display:none;" />
+
+        <div style="margin-top:14px; overflow:auto;">
+          <table class="mapping-table">
+            <thead>
+              <tr>
+                <th>Categoria</th>
+                <th>Grupo para excel</th>
+                <th>Peso</th>
+              </tr>
+            </thead>
+            <tbody id="mappingBody"></tbody>
+          </table>
+        </div>
+
+        <div class="mapping-actions">
+          <button id="addMapRowBtn">Agregar fila</button>
+          <button id="removeMapRowBtn">Quitar fila</button>
+        </div>
+
+        <div class="section-label">Grupos sin asignar</div>
+        <div class="list-box" id="unassignedList">(carga un archivo primero)</div>
+
+        <div class="footer-note">
+          Columnas esperadas en el Excel: <strong>Fecha</strong>, <strong>Precio</strong>, <strong>Grupo para excel</strong>.
+          <strong>Sucursal</strong> y <strong>Usuario</strong> son opcionales.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const DOW_NAMES_MON_FIRST = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    const DOW_NAMES_JS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    const DOW_TO_JS = [1, 2, 3, 4, 5, 6, 0];
+
+    const state = {
+      files: [],
+      rows: [],
+      allocDaily: new Map(),
+      categoriesDaily: ['Sin asignar'],
+      selectedCategories: ['Sin asignar'],
+      chart: null,
+      viewTable: { headers: [], rows: [] }
+    };
+
+    const el = {
+      excelFiles: document.getElementById('excelFiles'),
+      clearAllBtn: document.getElementById('clearAllBtn'),
+      downloadCsvBtn: document.getElementById('downloadCsvBtn'),
+      dedupChk: document.getElementById('dedupChk'),
+      baseChk: document.getElementById('baseChk'),
+      metricSel: document.getElementById('metricSel'),
+      branchesAllBtn: document.getElementById('branchesAllBtn'),
+      branchesNoneBtn: document.getElementById('branchesNoneBtn'),
+      branchList: document.getElementById('branchList'),
+      filesCount: document.getElementById('filesCount'),
+      rowsCount: document.getElementById('rowsCount'),
+      totalValue: document.getElementById('totalValue'),
+      statusLine: document.getElementById('statusLine'),
+      categoryList: document.getElementById('categoryList'),
+      catsAllBtn: document.getElementById('catsAllBtn'),
+      catsNoneBtn: document.getElementById('catsNoneBtn'),
+      yearSel: document.getElementById('yearSel'),
+      monthSel: document.getElementById('monthSel'),
+      dowGrid: document.getElementById('dowGrid'),
+      plotSubtitle: document.getElementById('plotSubtitle'),
+      dailyTable: document.getElementById('dailyTable'),
+      mappingBody: document.getElementById('mappingBody'),
+      addMapRowBtn: document.getElementById('addMapRowBtn'),
+      removeMapRowBtn: document.getElementById('removeMapRowBtn'),
+      applyMappingBtn: document.getElementById('applyMappingBtn'),
+      loadPresetBtn: document.getElementById('loadPresetBtn'),
+      savePresetBtn: document.getElementById('savePresetBtn'),
+      presetFileInput: document.getElementById('presetFileInput'),
+      unassignedList: document.getElementById('unassignedList'),
+      dowAllBtn: document.getElementById('dowAllBtn'),
+      dowNoneBtn: document.getElementById('dowNoneBtn')
+    };
+
+    function init() {
+      buildDowControls();
+      bindEvents();
+      addMappingRow();
+      refreshBranchList();
+      refreshCategoryList();
+      refreshYearMonth();
+      renderEmptyChart();
+      renderTable([], []);
+    }
+
+    function bindEvents() {
+      el.excelFiles.addEventListener('change', onExcelFilesSelected);
+      el.clearAllBtn.addEventListener('click', clearAll);
+      el.downloadCsvBtn.addEventListener('click', downloadCurrentTableCsv);
+      el.metricSel.addEventListener('change', updateAllViews);
+      el.dedupChk.addEventListener('change', () => {
+        refreshBranchList();
+        refreshYearMonth();
+        updateAllViews();
+      });
+      el.baseChk.addEventListener('change', updateAllViews);
+      el.branchList.addEventListener('change', () => {
+        refreshYearMonth();
+        updateAllViews();
+      });
+      el.branchesAllBtn.addEventListener('click', () => selectAllOptions(el.branchList));
+      el.branchesNoneBtn.addEventListener('click', () => clearSelection(el.branchList));
+      el.categoryList.addEventListener('change', () => {
+        state.selectedCategories = getSelectedValues(el.categoryList);
+        updateAllViews();
+      });
+      el.catsAllBtn.addEventListener('click', () => selectAllOptions(el.categoryList, true, () => {
+        state.selectedCategories = getSelectedValues(el.categoryList);
+        updateAllViews();
+      }));
+      el.catsNoneBtn.addEventListener('click', () => {
+        clearSelection(el.categoryList);
+        state.selectedCategories = [];
+        updateAllViews();
+      });
+      el.yearSel.addEventListener('change', () => {
+        refreshMonthOptions();
+        updateAllViews();
+      });
+      el.monthSel.addEventListener('change', updateAllViews);
+      el.addMapRowBtn.addEventListener('click', () => addMappingRow());
+      el.removeMapRowBtn.addEventListener('click', removeLastMappingRow);
+      el.applyMappingBtn.addEventListener('click', applyDailyMapping);
+      el.loadPresetBtn.addEventListener('click', () => el.presetFileInput.click());
+      el.presetFileInput.addEventListener('change', onPresetSelected);
+      el.savePresetBtn.addEventListener('click', savePreset);
+      el.dowAllBtn.addEventListener('click', () => setAllDow(true));
+      el.dowNoneBtn.addEventListener('click', () => setAllDow(false));
+    }
+
+    function buildDowControls() {
+      el.dowGrid.innerHTML = '';
+      DOW_NAMES_MON_FIRST.forEach((name, idx) => {
+        const wrap = document.createElement('label');
+        wrap.innerHTML = `<input type="checkbox" data-dow="${idx}" checked /> ${escapeHtml(name)}`;
+        wrap.querySelector('input').addEventListener('change', updateAllViews);
+        el.dowGrid.appendChild(wrap);
+      });
+    }
+
+    function setAllDow(flag) {
+      el.dowGrid.querySelectorAll('input[type="checkbox"]').forEach(chk => chk.checked = flag);
+      updateAllViews();
+    }
+
+    function getSelectedDowIdx() {
+      return Array.from(el.dowGrid.querySelectorAll('input[type="checkbox"]'))
+        .filter(chk => chk.checked)
+        .map(chk => Number(chk.dataset.dow));
+    }
+
+    async function onExcelFilesSelected(evt) {
+      const files = Array.from(evt.target.files || []);
+      if (!files.length) return;
+
+      setStatus(`Leyendo ${files.length} archivo(s)...`);
+      const parsedRows = [];
+      const okNames = [];
+      const badNames = [];
+
+      for (const file of files) {
+        try {
+          const arr = await file.arrayBuffer();
+          const workbook = XLSX.read(arr, { type: 'array', cellDates: true, raw: true });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: true });
+          const rows = extractRowsFromJson(json);
+          parsedRows.push(...rows);
+          okNames.push(file.name);
+        } catch (err) {
+          console.error(err);
+          badNames.push(file.name);
+        }
+      }
+
+      state.files = state.files.concat(okNames);
+      state.rows = state.rows.concat(parsedRows);
+      refreshBranchList();
+      refreshUnassignedDaily();
+      refreshYearMonth();
+      updateAllViews();
+
+      if (!okNames.length) {
+        setStatus('No se pudo leer ningún archivo.');
+      } else if (badNames.length) {
+        setStatus(`Se agregaron ${okNames.length} archivo(s). ${badNames.length} falló/fallaron.`);
+      } else {
+        setStatus(`Listo. Se agregaron ${okNames.length} archivo(s).`);
+      }
+
+      evt.target.value = '';
+    }
+
+    function extractRowsFromJson(json) {
+      if (!Array.isArray(json) || !json.length) return [];
+      const headers = Object.keys(json[0] || {});
+      const colDate = findColumn(headers, 'date');
+      const colPrice = findColumn(headers, 'price');
+      const colGroup = findColumn(headers, 'group');
+      const colBranch = findColumn(headers, 'branch');
+      const colUser = findColumn(headers, 'user');
+
+      if (!colDate || !colPrice || !colGroup) {
+        throw new Error('Faltan columnas requeridas: Fecha, Precio, Grupo para excel.');
+      }
+
+      const out = [];
+      for (const row of json) {
+        const date = parseExcelDate(row[colDate]);
+        const sales = parseMoney(row[colPrice]);
+        const group = cleanKey(row[colGroup], 'SIN GRUPO');
+        const branch = cleanKey(colBranch ? row[colBranch] : null, 'SIN SUCURSAL');
+        const user = cleanKey(colUser ? row[colUser] : null, 'SIN USUARIO');
+        if (!date || !Number.isFinite(sales)) continue;
+        out.push({ date, sales, group, branch, user });
+      }
+      return out;
+    }
+
+    function findColumn(headers, type) {
+      const scored = headers.map(h => ({ h, n: normalizeName(h), s: scoreHeader(h, type) }))
+        .sort((a, b) => b.s - a.s);
+      return scored.length && scored[0].s > 0 ? scored[0].h : null;
+    }
+
+    function scoreHeader(header, type) {
+      const n = normalizeName(header);
+      const add = term => n.includes(term) ? 1 : 0;
+      if (type === 'date') return add('fecha') * 3 + add('crea') * 2 + add('date');
+      if (type === 'price') return add('precio') * 3 + add('venta') + add('monto');
+      if (type === 'group') return add('grupo') * 3 + add('excel') * 2 + add('group');
+      if (type === 'branch') return add('sucursal') * 3 + add('branch');
+      if (type === 'user') return add('usuario') * 3 + add('user');
+      return 0;
+    }
+
+    function normalizeName(v) {
+      return String(v ?? '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .replace(/[^a-z0-9]/g, '');
+    }
+
+    function cleanKey(v, fallback) {
+      const s = String(v ?? '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+      return s || fallback;
+    }
+
+    function parseMoney(v) {
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      if (v == null) return NaN;
+      const digits = String(v).replace(/[^\d.-]/g, '');
+      const num = Number(digits);
+      return Number.isFinite(num) ? num : NaN;
+    }
+
+    function parseExcelDate(v) {
+      if (v instanceof Date && !Number.isNaN(v.getTime())) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
+      if (typeof v === 'number' && window.XLSX?.SSF?.parse_date_code) {
+        const d = XLSX.SSF.parse_date_code(v);
+        if (d && d.y && d.m && d.d) return new Date(d.y, d.m - 1, d.d);
+      }
+      if (typeof v === 'string') {
+        const s = v.trim();
+        if (!s) return null;
+        const m1 = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+        if (m1) {
+          const day = Number(m1[1]);
+          const month = Number(m1[2]);
+          const year = Number(m1[3].length === 2 ? '20' + m1[3] : m1[3]);
+          const dt = new Date(year, month - 1, day);
+          return Number.isNaN(dt.getTime()) ? null : dt;
+        }
+        const dt = new Date(s);
+        if (!Number.isNaN(dt.getTime())) return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+      }
+      return null;
+    }
+
+    function clearAll() {
+      state.files = [];
+      state.rows = [];
+      refreshBranchList();
+      refreshUnassignedDaily();
+      refreshYearMonth();
+      updateAllViews();
+      el.excelFiles.value = '';
+      setStatus('Carga uno o más Excel para comenzar.');
+    }
+
+    function getProcessedRows() {
+      const rows = state.rows.slice();
+      if (!el.dedupChk.checked) return rows;
+      const seen = new Set();
+      const out = [];
+      for (const r of rows) {
+        const key = `${ymd(r.date)}|${Math.round(r.sales)}|${r.group}|${r.branch}|${r.user}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(r);
+      }
+      return out;
+    }
+
+    function ymd(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function refreshBranchList() {
+      const rows = getProcessedRows();
+      const old = getSelectedValues(el.branchList);
+      const branches = [...new Set(rows.map(r => r.branch))].sort();
+      el.branchList.innerHTML = '';
+      if (!branches.length) {
+        const opt = new Option('(carga un archivo primero)', '', false, false);
+        opt.disabled = true;
+        el.branchList.add(opt);
+        return;
+      }
+      branches.forEach(b => {
+        const opt = new Option(b, b, false, old.length ? old.includes(b) : true);
+        el.branchList.add(opt);
+      });
+    }
+
+    function refreshCategoryList() {
+      const prev = state.selectedCategories?.length ? state.selectedCategories.slice() : [];
+      el.categoryList.innerHTML = '';
+      const items = state.categoriesDaily.length ? state.categoriesDaily : ['Sin asignar'];
+      items.forEach(c => {
+        const selected = prev.length ? prev.includes(c) : true;
+        el.categoryList.add(new Option(c, c, false, selected));
+      });
+      state.selectedCategories = getSelectedValues(el.categoryList);
+    }
+
+    function refreshYearMonth() {
+      const rows = getRowsFilteredByBranches();
+      const years = [...new Set(rows.map(r => r.date.getFullYear()))].sort((a, b) => a - b);
+      const prevYear = Number(el.yearSel.value);
+      el.yearSel.innerHTML = '';
+      if (!years.length) {
+        el.yearSel.add(new Option('(sin datos)', ''));
+        el.monthSel.innerHTML = '';
+        el.monthSel.add(new Option('(sin datos)', ''));
+        return;
+      }
+      years.forEach(y => el.yearSel.add(new Option(String(y), String(y), false, y === prevYear)));
+      if (!years.includes(prevYear)) el.yearSel.value = String(years[years.length - 1]);
+      refreshMonthOptions();
+    }
+
+    function refreshMonthOptions() {
+      const rows = getRowsFilteredByBranches();
+      const year = Number(el.yearSel.value);
+      const prevMonth = Number(el.monthSel.value);
+      const months = [...new Set(rows.filter(r => r.date.getFullYear() === year).map(r => r.date.getMonth() + 1))]
+        .sort((a, b) => a - b);
+
+      el.monthSel.innerHTML = '';
+      if (!months.length) {
+        el.monthSel.add(new Option('(sin datos)', ''));
+        return;
+      }
+      months.forEach(m => el.monthSel.add(new Option(`${String(m).padStart(2, '0')} - ${MONTH_NAMES[m - 1]}`, String(m), false, m === prevMonth)));
+      if (!months.includes(prevMonth)) el.monthSel.value = String(months[months.length - 1]);
+    }
+
+    function getRowsFilteredByBranches() {
+      const rows = getProcessedRows();
+      const branches = getSelectedValues(el.branchList);
+      if (!branches.length) return rows;
+      const set = new Set(branches);
+      return rows.filter(r => set.has(r.branch));
+    }
+
+    function getSelectedYearMonth() {
+      const year = Number(el.yearSel.value);
+      const month = Number(el.monthSel.value);
+      return {
+        year: Number.isFinite(year) ? year : null,
+        month: Number.isFinite(month) ? month : null
+      };
+    }
+
+    function addMappingRow(cat = '', group = '', weight = 1) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input type="text" class="map-cat" value="${escapeAttr(cat)}" /></td>
+        <td><input type="text" class="map-group" value="${escapeAttr(group)}" /></td>
+        <td><input type="number" class="map-weight" step="any" value="${Number.isFinite(Number(weight)) ? Number(weight) : 1}" /></td>
+      `;
+      el.mappingBody.appendChild(tr);
+    }
+
+    function removeLastMappingRow() {
+      if (el.mappingBody.lastElementChild) el.mappingBody.lastElementChild.remove();
+    }
+
+    function getMappingRowsFromUI() {
+      return Array.from(el.mappingBody.querySelectorAll('tr')).map(tr => ({
+        cat: tr.querySelector('.map-cat').value.trim(),
+        group: cleanKey(tr.querySelector('.map-group').value, ''),
+        weight: Number(tr.querySelector('.map-weight').value)
+      }));
+    }
+
+    function applyDailyMapping() {
+      const rows = getMappingRowsFromUI();
+      const alloc = new Map();
+      const cats = [];
+      const pairSet = new Set();
+
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r.cat || !r.group || !Number.isFinite(r.weight)) continue;
+        if (r.weight < 0) {
+          setStatus(`Error en asignaciones: el peso de la fila ${i + 1} debe ser >= 0.`, true);
+          return;
+        }
+        const pair = `${r.group}|${r.cat.toUpperCase()}`;
+        if (pairSet.has(pair)) {
+          setStatus('Error en asignaciones: hay filas duplicadas con la misma Categoria y Grupo.', true);
+          return;
+        }
+        pairSet.add(pair);
+        cats.push(r.cat);
+        if (!alloc.has(r.group)) alloc.set(r.group, { cats: [], weights: [] });
+        const a = alloc.get(r.group);
+        a.cats.push(r.cat);
+        a.weights.push(r.weight);
+      }
+
+      state.allocDaily = alloc;
+      state.categoriesDaily = uniqueStable(cats.concat(['Sin asignar']));
+      refreshCategoryList();
+      refreshUnassignedDaily();
+      updateAllViews();
+      setStatus('Asignaciones DIARIO aplicadas.');
+    }
+
+    function refreshUnassignedDaily() {
+      if (!state.rows.length) {
+        el.unassignedList.textContent = '(carga un archivo primero)';
+        return;
+      }
+      const groups = [...new Set(state.rows.map(r => r.group))].sort();
+      const unassigned = groups.filter(g => !state.allocDaily.has(g));
+      if (!unassigned.length) {
+        el.unassignedList.innerHTML = '<span class="ok">(todos asignados OK)</span>';
+        return;
+      }
+      el.unassignedList.innerHTML = unassigned.map(g => `<span class="pill">${escapeHtml(g)}</span>`).join('');
+    }
+
+    async function onPresetSelected(evt) {
+      const file = evt.target.files?.[0];
+      if (!file) return;
+      const text = await file.text();
+      const rows = parsePresetText(text);
+      el.mappingBody.innerHTML = '';
+      if (!rows.length) addMappingRow();
+      rows.forEach(r => addMappingRow(r.cat, r.group, r.weight));
+      applyDailyMapping();
+      evt.target.value = '';
+    }
+
+    function parsePresetText(text) {
+      return String(text || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'))
+        .map(line => line.replace(/\\t/g, '\t'))
+        .map(line => line.includes('\t') ? line.split('\t') : line.split(','))
+        .map(parts => parts.map(p => p.trim()).filter(Boolean))
+        .filter(parts => parts.length >= 3)
+        .map(parts => {
+          const w = Number(String(parts[2]).replace(',', '.'));
+          return {
+            cat: parts[0],
+            group: cleanKey(parts[1], ''),
+            weight: Number.isFinite(w) ? w : 1
+          };
+        });
+    }
+
+    function savePreset() {
+      const rows = getMappingRowsFromUI()
+        .filter(r => r.cat && r.group && Number.isFinite(r.weight));
+      const lines = ['# Categoria\tGrupo para excel\tPeso'];
+      rows.forEach(r => lines.push(`${r.cat}\t${r.group}\t${r.weight}`));
+      downloadText('preset_diario.txt', lines.join('\n'));
+    }
+
+    function updateAllViews() {
+      const processed = getProcessedRows();
+      el.filesCount.textContent = String(state.files.length);
+      el.rowsCount.textContent = String(processed.length);
+
+      if (!processed.length) {
+        renderEmptyChart();
+        renderTable([], []);
+        el.totalValue.textContent = '—';
+        el.plotSubtitle.textContent = 'Sin datos';
+        if (!state.files.length) return;
+      }
+
+      const metricMode = el.metricSel.value;
+      const catsSel = getSelectedValues(el.categoryList);
+      state.selectedCategories = catsSel;
+      const { year, month } = getSelectedYearMonth();
+
+      const baseRows = getRowsFilteredByBranches();
+      const scopedRows = baseRows.filter(r => year && month && r.date.getFullYear() === year && (r.date.getMonth() + 1) === month);
+      const nDays = year && month ? new Date(year, month, 0).getDate() : 31;
+      const selectedDow = getSelectedDowIdx();
+      const dowJsSet = new Set(selectedDow.map(i => DOW_TO_JS[i]));
+
+      const catResults = computeDailyByCategories(scopedRows, catsSel, year, month, dowJsSet);
+      const baseSeries = el.baseChk.checked ? computeDailyRawTotal(scopedRows, metricMode, year, month, dowJsSet) : null;
+
+      const totalValue = metricMode === 'Monto'
+        ? sum(catResults.salesByDay.reduce((acc, row) => acc + row.reduce((a, b) => a + b, 0), 0), 0)
+        : sum(catResults.itemsByDay.reduce((acc, row) => acc + row.reduce((a, b) => a + b, 0), 0), 0);
+      el.totalValue.textContent = catsSel.length
+        ? (metricMode === 'Monto' ? formatPeso(totalValue) : formatInt(totalValue))
+        : '—';
+
+      renderDailyChart(catResults, metricMode, year, month, catsSel, baseSeries);
+      const table = buildDailyTable(catResults, catsSel, year, month);
+      renderTable(table.headers, table.rows);
+      state.viewTable = table;
+
+      const branchValues = getSelectedValues(el.branchList);
+      const branchText = branchValues.length ? `${branchValues.length} sucursal(es)` : 'Todas las sucursales';
+      el.plotSubtitle.textContent = year && month ? `${year}-${String(month).padStart(2, '0')} · ${branchText}` : 'Sin datos';
+
+      if (processed.length && !year) setStatus('No hay datos para la combinación actual de filtros.');
+    }
+
+    function computeDailyByCategories(rows, catsSel, year, month, dowJsSet) {
+      const nDays = year && month ? new Date(year, month, 0).getDate() : 31;
+      const days = Array.from({ length: nDays }, (_, i) => i + 1);
+      const itemsByDay = Array.from({ length: nDays }, () => Array(catsSel.length).fill(0));
+      const salesByDay = Array.from({ length: nDays }, () => Array(catsSel.length).fill(0));
+      const catIndex = new Map(catsSel.map((c, i) => [c, i]));
+
+      for (const r of rows) {
+        const day = r.date.getDate();
+        const jsDow = r.date.getDay();
+        if (!dowJsSet.has(jsDow)) continue;
+        const alloc = state.allocDaily.get(r.group) || { cats: ['Sin asignar'], weights: [1] };
+        for (let i = 0; i < alloc.cats.length; i++) {
+          const cat = alloc.cats[i];
+          const idx = catIndex.get(cat);
+          if (idx == null) continue;
+          const weight = Number(alloc.weights[i]) || 0;
+          salesByDay[day - 1][idx] += r.sales * weight;
+          if (weight > 0) itemsByDay[day - 1][idx] += 1;
+        }
+      }
+
+      return { days, itemsByDay, salesByDay };
+    }
+
+    function computeDailyRawTotal(rows, metricMode, year, month, dowJsSet) {
+      const nDays = year && month ? new Date(year, month, 0).getDate() : 31;
+      const out = Array(nDays).fill(0);
+      for (const r of rows) {
+        const jsDow = r.date.getDay();
+        if (!dowJsSet.has(jsDow)) continue;
+        const day = r.date.getDate();
+        out[day - 1] += metricMode === 'Monto' ? r.sales : 1;
+      }
+      return out;
+    }
+
+    function buildDailyTable(results, catsSel, year, month) {
+      const headers = ['Dia', 'Dia semana'];
+      catsSel.forEach(cat => {
+        headers.push(`${cat} (items)`);
+        headers.push(`${cat} (venta)`);
+      });
+
+      const rows = [];
+      const nDays = results.days.length;
+      for (let i = 0; i < nDays; i++) {
+        const date = year && month ? new Date(year, month - 1, i + 1) : null;
+        const row = [String(i + 1), date ? DOW_NAMES_JS[date.getDay()] : ''];
+        for (let c = 0; c < catsSel.length; c++) {
+          row.push(formatInt(results.itemsByDay[i][c]));
+          row.push(formatPeso(results.salesByDay[i][c]));
+        }
+        rows.push(row);
+      }
+
+      const total = ['TOTAL', ''];
+      for (let c = 0; c < catsSel.length; c++) {
+        const ti = results.itemsByDay.reduce((acc, row) => acc + row[c], 0);
+        const ts = results.salesByDay.reduce((acc, row) => acc + row[c], 0);
+        total.push(formatInt(ti));
+        total.push(formatPeso(ts));
+      }
+      if (catsSel.length) rows.push(total);
+      return { headers, rows };
+    }
+
+    function renderDailyChart(results, metricMode, year, month, catsSel, baseSeries) {
+      const ctx = document.getElementById('dailyChart');
+      const datasets = [];
+
+      if (Array.isArray(baseSeries) && baseSeries.length) {
+        datasets.push({
+          label: 'Total sin filtro de categoría',
+          data: baseSeries,
+          borderColor: '#b6bdca',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2
+        });
+      }
+
+      if (catsSel.length) {
+        const totalSelected = results.days.map((_, i) => {
+          const arr = metricMode === 'Monto' ? results.salesByDay[i] : results.itemsByDay[i];
+          return arr.reduce((a, b) => a + b, 0);
+        });
+        datasets.push({
+          label: 'Total seleccionadas',
+          data: totalSelected,
+          borderColor: '#6b7280',
+          backgroundColor: 'transparent',
+          borderWidth: 3,
+          pointRadius: 0,
+          tension: 0.2
+        });
+      }
+
+      const palette = ['#1f6feb', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+      catsSel.forEach((cat, idx) => {
+        const data = results.days.map((_, i) => metricMode === 'Monto' ? results.salesByDay[i][idx] : results.itemsByDay[i][idx]);
+        datasets.push({
+          label: cat,
+          data,
+          borderColor: palette[idx % palette.length],
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 3,
+          tension: 0.2
+        });
+      });
+
+      if (state.chart) state.chart.destroy();
+      state.chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: results.days,
+          datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'top', align: 'start' },
+            title: {
+              display: true,
+              text: year && month ? `Ventas diarias ${year}-${String(month).padStart(2, '0')}` : 'Ventas diarias'
+            },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  const v = ctx.parsed.y;
+                  return `${ctx.dataset.label}: ${metricMode === 'Monto' ? formatPeso(v) : formatInt(v)}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              title: { display: true, text: 'Día' },
+              max: 39
+            },
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: metricMode === 'Monto' ? 'Venta' : 'Items' },
+              ticks: {
+                callback: value => metricMode === 'Monto' ? compactNumber(value) : value
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderEmptyChart() {
+      if (state.chart) state.chart.destroy();
+      const ctx = document.getElementById('dailyChart');
+      state.chart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, title: { display: true, text: 'Sin datos' } },
+          scales: {
+            x: { title: { display: true, text: 'Día' }, min: 0, max: 40 },
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    function renderTable(headers, rows) {
+      const table = el.dailyTable;
+      if (!headers.length) {
+        table.innerHTML = '<thead><tr><th>Sin datos</th></tr></thead><tbody><tr><td class="muted">Carga datos o ajusta filtros.</td></tr></tbody>';
+        return;
+      }
+      const thead = `<thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>`;
+      const tbody = `<tbody>${rows.map((row, idx) => `<tr class="${idx === rows.length - 1 ? 'total-row' : ''}">${row.map(c => `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      table.innerHTML = thead + tbody;
+    }
+
+    function downloadCurrentTableCsv() {
+      if (!state.viewTable.headers.length) return;
+      const lines = [state.viewTable.headers.join(',')];
+      state.viewTable.rows.forEach(r => {
+        lines.push(r.map(csvCell).join(','));
+      });
+      downloadText('ventas_diarias_tabla.csv', lines.join('\n'));
+    }
+
+    function csvCell(v) {
+      const s = String(v ?? '');
+      if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    }
+
+    function downloadText(filename, content) {
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function getSelectedValues(select) {
+      return Array.from(select.selectedOptions || []).map(o => o.value).filter(Boolean);
+    }
+
+    function selectAllOptions(select, trigger = true, cb = null) {
+      Array.from(select.options).forEach(opt => { if (!opt.disabled) opt.selected = true; });
+      if (trigger && cb) cb();
+      else if (trigger) select.dispatchEvent(new Event('change'));
+    }
+
+    function clearSelection(select) {
+      Array.from(select.options).forEach(opt => opt.selected = false);
+      select.dispatchEvent(new Event('change'));
+    }
+
+    function uniqueStable(arr) {
+      const out = [];
+      const seen = new Set();
+      for (const x of arr) {
+        const k = String(x ?? '').trim();
+        if (!k || seen.has(k)) continue;
+        seen.add(k);
+        out.push(k);
+      }
+      return out;
+    }
+
+    function formatPeso(v) {
+      const n = Math.round(Number(v) || 0);
+      return `$ ${Math.abs(n).toLocaleString('en-US')}`.replace('$ ', n < 0 ? '$ -' : '$ ');
+    }
+
+    function formatInt(v) {
+      return Math.round(Number(v) || 0).toLocaleString('en-US');
+    }
+
+    function compactNumber(v) {
+      const n = Number(v) || 0;
+      if (Math.abs(n) >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+      if (Math.abs(n) >= 1e3) return `${(n / 1e3).toFixed(1)}k`;
+      return `${Math.round(n)}`;
+    }
+
+    function sum(a, fallback = 0) {
+      return Number.isFinite(a) ? a : fallback;
+    }
+
+    function setStatus(msg, isError = false) {
+      el.statusLine.textContent = msg;
+      el.statusLine.className = isError ? 'status bad' : 'status';
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttr(str) {
+      return escapeHtml(str).replace(/`/g, '&#96;');
+    }
+
+    init();
+  </script>
+</body>
+</html>
