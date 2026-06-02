@@ -1107,7 +1107,14 @@
       });
       return row;
     });
-    renderTable('tableDaily', headers, rows, true);
+
+    // En la tabla diaria, las columnas impares son items y las pares son monto.
+    // Por eso no usamos formatMetric global acá: evitaría que "items" aparezca con $.
+    renderTable('tableDaily', headers, rows, true, (cell, colIndex) => {
+      if (colIndex === 0) return cell;
+      if (typeof cell !== 'number') return cell;
+      return colIndex % 2 === 1 ? formatInteger(cell) : formatCurrency(cell);
+    });
     setCurrentTable(headers, rows);
   }
 
@@ -1133,13 +1140,36 @@
 
   function renderRatio() {
     const result = computeRatio();
-    const datasets = [{ label: 'TOTAL', data: result.total, borderColor: '#737373', backgroundColor: '#737373', borderWidth: 2.2 }];
-    result.labels.forEach((label, i) => datasets.push({ label, data: result.ratio[i], tension: 0.1 }));
-    renderChart('chartRatio', MONTHS.map(m => m.slice(0,3)), datasets, result.yEmpty ? ylabel() : 'Ratio');
     const headers = ['Usuario', ...MONTHS.map(m => m.slice(0,3))];
-    const rows = result.users.map((u, i) => [shortUserLabel(u), ...result.ratio[i]]);
-    renderTable('tableRatio', headers, rows, !result.yEmpty);
-    setCurrentTable(headers, rows);
+
+    // Si Y está vacío, el panel muestra X como valor absoluto.
+    // Si hay X/Y, lo mostramos como porcentaje: ratio * 100 + "%".
+    if (result.yEmpty) {
+      const datasets = [{ label: 'TOTAL', data: result.total, borderColor: '#737373', backgroundColor: '#737373', borderWidth: 2.2 }];
+      result.labels.forEach((label, i) => datasets.push({ label, data: result.ratio[i], tension: 0.1 }));
+      renderChart('chartRatio', MONTHS.map(m => m.slice(0,3)), datasets, ylabel());
+      const rows = result.users.map((u, i) => [shortUserLabel(u), ...result.ratio[i]]);
+      renderTable('tableRatio', headers, rows, true);
+      setCurrentTable(headers, rows);
+      return;
+    }
+
+    const toPct = arr => arr.map(v => v == null || Number.isNaN(Number(v)) ? null : Number(v) * 100);
+    const totalPct = toPct(result.total);
+    const ratioPct = result.ratio.map(toPct);
+    const datasets = [{ label: 'TOTAL', data: totalPct, borderColor: '#737373', backgroundColor: '#737373', borderWidth: 2.2 }];
+    result.labels.forEach((label, i) => datasets.push({ label, data: ratioPct[i], tension: 0.1 }));
+    renderChart('chartRatio', MONTHS.map(m => m.slice(0,3)), datasets, 'Ratio (%)');
+
+    const rows = result.users.map((u, i) => [shortUserLabel(u), ...ratioPct[i]]);
+    renderTable('tableRatio', headers, rows, true, (cell, colIndex) => {
+      if (colIndex === 0) return cell;
+      return formatPercentValue(cell);
+    });
+
+    // Para copiar/CSV, dejamos también el símbolo % en la tabla de ratios.
+    const exportRows = rows.map(row => row.map((cell, colIndex) => colIndex === 0 ? cell : formatPercentValue(cell)));
+    setCurrentTable(headers, exportRows);
   }
 
   function renderFiles() {
@@ -1164,12 +1194,15 @@
     });
   }
 
-  function renderTable(containerId, headers, rows, formatNumbers) {
+  function renderTable(containerId, headers, rows, formatNumbers, customFormatter) {
     if (!headers.length) {
       $(containerId).innerHTML = '<div class="status" style="padding:12px;">No hay datos para mostrar.</div>';
       return;
     }
-    const html = `<table><thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map((cell, i) => `<td>${escapeHtml(formatNumbers && typeof cell === 'number' ? formatMetric(cell) : cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    const html = `<table><thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map((cell, i) => {
+      const shown = customFormatter ? customFormatter(cell, i, row) : (formatNumbers && typeof cell === 'number' ? formatMetric(cell) : cell);
+      return `<td>${escapeHtml(shown)}</td>`;
+    }).join('')}</tr>`).join('')}</tbody></table>`;
     $(containerId).innerHTML = html;
   }
 
@@ -1186,14 +1219,29 @@
     return new Date(year, month, 0).getDate();
   }
 
-  function formatMetric(v) {
+  function formatCurrency(v) {
     if (v == null || Number.isNaN(Number(v))) return '';
-    if ($('metricMode').value === 'Monto') return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(v));
+    return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(v));
+  }
+
+  function formatInteger(v) {
+    if (v == null || Number.isNaN(Number(v))) return '';
     return new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(Number(v));
+  }
+
+  function formatPercentValue(v) {
+    if (v == null || Number.isNaN(Number(v))) return '';
+    return `${new Intl.NumberFormat('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(Number(v))}%`;
+  }
+
+  function formatMetric(v) {
+    if ($('metricMode').value === 'Monto') return formatCurrency(v);
+    return formatInteger(v);
   }
 
   function formatMetricForTooltip(v, yTitle) {
     if (v == null || Number.isNaN(Number(v))) return '';
+    if (yTitle === 'Ratio (%)') return formatPercentValue(v);
     if (yTitle === 'Ratio') return Number(v).toFixed(3);
     return formatMetric(v);
   }
