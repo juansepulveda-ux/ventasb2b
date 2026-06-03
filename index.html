@@ -179,7 +179,7 @@
 <body>
 <header>
   <h1>Visualizador de Ventas</h1>
-  <p>App web para cargar Excel, configurar categorías y calcular ventas por mes, acumuladas, por categoría, diarias y ratios. Todo se procesa localmente en el navegador.</p>
+  <p>App web para cargar Excel, configurar categorías y calcular ventas por mes, acumuladas, por categoría, por usuario, diarias y ratios. Todo se procesa localmente en el navegador.</p>
 </header>
 
 <main>
@@ -234,7 +234,7 @@
     <div class="work-grid">
       <aside class="card">
         <div class="side-section">
-          <h3>Categorías (reporte)</h3>
+          <h3>Categorías (desde Grupo para excel)</h3>
           <select id="reportCatsMonthly" class="multi-select" multiple></select>
           <div class="button-row" style="margin-top: 8px;">
             <button class="small" data-select-cats="reportCatsMonthly">Todas</button>
@@ -263,7 +263,7 @@
     <div class="work-grid">
       <aside class="card">
         <div class="side-section">
-          <h3>Categorías (reporte)</h3>
+          <h3>Categorías (desde Grupo para excel)</h3>
           <select id="reportCatsCum" class="multi-select" multiple></select>
           <div class="button-row" style="margin-top: 8px;">
             <button class="small" data-select-cats="reportCatsCum">Todas</button>
@@ -284,7 +284,7 @@
     <div class="work-grid">
       <aside class="card">
         <div class="side-section">
-          <h3>Categorías (reporte)</h3>
+          <h3>Categorías (desde Grupo para excel)</h3>
           <select id="reportCatsCatYear" class="multi-select" multiple></select>
           <div class="button-row" style="margin-top: 8px;">
             <button class="small" data-select-cats="reportCatsCatYear">Todas</button>
@@ -300,6 +300,32 @@
         <div class="total-box"><div><div class="muted">Vista</div><div class="big">Categorías por año</div></div><div class="button-row"><button id="copyCatYear">Copiar Excel</button></div></div>
         <div class="chart-wrap"><canvas id="chartCatYear"></canvas></div>
         <div id="tableCatYear" class="table-wrap"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-usercat" class="tab">
+    <div class="work-grid">
+      <aside class="card">
+        <div class="side-section">
+          <h3>Usuario</h3>
+          <label for="userCatUser">Selecciona un solo usuario</label>
+          <select id="userCatUser"></select>
+        </div>
+        <div class="side-section">
+          <h3>Categorías (desde Grupo para excel)</h3>
+          <select id="userCatCats" class="multi-select" multiple></select>
+          <div class="button-row" style="margin-top: 8px;">
+            <button class="small" data-select-cats="userCatCats">Todas</button>
+            <button class="small" data-clear-cats="userCatCats">Ninguna</button>
+          </div>
+        </div>
+        <div class="help">Esta pestaña toma las categorías directamente desde los valores únicos de la columna <strong>Grupo para excel</strong>. Respeta el usuario, sucursal, métrica, duplicadas y días de semana de reporte.</div>
+      </aside>
+      <div class="card chart-card">
+        <div class="total-box"><div><div class="muted">Vista</div><div class="big" id="userCatTitle">Usuario por categorías</div></div><div class="button-row"><button id="copyUserCat">Copiar Excel</button></div></div>
+        <div class="chart-wrap"><canvas id="chartUserCat"></canvas></div>
+        <div id="tableUserCat" class="table-wrap"></div>
       </div>
     </div>
   </section>
@@ -376,7 +402,7 @@
     <div class="two-col">
       <div class="card">
         <h2 style="margin-top:0;">Configuración reporte</h2>
-        <p class="status">Usada por Ventas por mes, Acumuladas, Categorías por año y Ratio de categorías. Formato: Categoría, Grupo para excel, Peso.</p>
+        <p class="status">Usada por Ventas por mes, Acumuladas, Categorías por año y Ratio de categorías. La pestaña Usuario por categorías usa directamente los valores de Grupo para excel del Excel cargado. Formato de este preset: Categoría, Grupo para excel, Peso.</p>
         <div class="button-row" style="margin-bottom:10px;">
           <button id="loadReportPresetBtn">Cargar preset TXT</button>
           <button id="saveReportPresetBtn">Guardar preset TXT</button>
@@ -465,6 +491,7 @@
       ['monthly', 'Ventas por mes'],
       ['cum', 'Acumuladas'],
       ['catyear', 'Categorías por año'],
+      ['usercat', 'Usuario por categorías'],
       ['daily', 'Ventas diarias'],
       ['ratio', 'Ratio'],
       ['config', 'Configuración'],
@@ -509,6 +536,8 @@
     $('catYearSelect').addEventListener('change', refreshAll);
     $('ratioYear').addEventListener('change', refreshAll);
     $('ratioUsers').addEventListener('change', refreshAll);
+    $('userCatUser').addEventListener('change', refreshAll);
+    $('userCatCats').addEventListener('change', refreshAll);
 
     $('addReportRow').addEventListener('click', () => { state.reportMap.push({ cat: '', group: '', weight: 1 }); renderMappingTable('reportMappingTable', state.reportMap); });
     $('removeReportRow').addEventListener('click', () => { state.reportMap.pop(); renderMappingTable('reportMappingTable', state.reportMap); });
@@ -536,6 +565,7 @@
     $('copyMonthly').addEventListener('click', () => copyCurrentTable('monthly'));
     $('copyCum').addEventListener('click', () => copyCurrentTable('cum'));
     $('copyCatYear').addEventListener('click', () => copyCurrentTable('catyear'));
+    $('copyUserCat').addEventListener('click', () => copyCurrentTable('usercat'));
     $('copyDaily').addEventListener('click', () => copyCurrentTable('daily'));
   }
 
@@ -737,7 +767,12 @@
     const branchSet = new Set(branches);
     const allBranches = branches.length === 0;
     const users = unique(getRows().filter(r => allBranches || branchSet.has(r.branch)).map(r => r.user)).sort(localeSort);
-    setOptions('ratioUsers', users.map(u => ({ value: u, label: shortUserLabel(u) })), users);
+    const options = users.map(u => ({ value: u, label: shortUserLabel(u) }));
+    setOptions('ratioUsers', options, users);
+
+    const currentUser = selectedValues('userCatUser')[0];
+    const selectedUser = currentUser && users.includes(currentUser) ? [currentUser] : (users.length ? [users[0]] : []);
+    setOptions('userCatUser', options, selectedUser);
   }
 
   function shortUserLabel(name) {
@@ -855,8 +890,17 @@
 
   function updateCategoryControls() {
     const reportOld = selectedValues('reportCatsMonthly');
+    const userCatOld = selectedValues('userCatCats');
     const dailyOld = selectedValues('dailyCats');
+    const excelGroups = unique(state.rows.map(r => r.group).filter(Boolean)).sort(localeSort);
+
     ['reportCatsMonthly', 'reportCatsCum', 'reportCatsCatYear'].forEach(id => setOptions(id, state.reportCategories, reportOld.length ? reportOld : state.reportCategories));
+
+    // En esta pestaña, las "categorías" son los valores reales de la columna
+    // "Grupo para excel" del archivo cargado, no las categorías del preset.
+    const userCatSelected = userCatOld.filter(g => excelGroups.includes(g));
+    setOptions('userCatCats', excelGroups, userCatSelected.length ? userCatSelected : excelGroups);
+
     setOptions('dailyCats', state.dailyCategories, dailyOld.length ? dailyOld : state.dailyCategories);
   }
 
@@ -897,6 +941,29 @@
       data.get(year)[r.date.getMonth()] += v;
     }
     return mapToYearSeries(data);
+  }
+
+  function computeMonthlyForUserCategories() {
+    const metric = $('metricMode').value;
+    const user = selectedValues('userCatUser')[0];
+    const cats = selectedValues('userCatCats');
+    const selectedGroups = new Set(cats);
+    const data = new Map();
+
+    if (!user || !cats.length) return { user, cats, years: [], matrix: [] };
+
+    const rows = getFilteredRows({ branch: true, reportDow: true, users: [user] });
+    for (const r of rows) {
+      // Aquí filtramos directamente por Grupo para excel. No se usa el preset.
+      if (!selectedGroups.has(r.group)) continue;
+      const v = metric === 'Monto' ? r.sales : 1;
+      if (!v) continue;
+      const year = r.date.getFullYear();
+      if (!data.has(year)) data.set(year, Array(12).fill(0));
+      data.get(year)[r.date.getMonth()] += v;
+    }
+    const series = mapToYearSeries(data);
+    return { user, cats, years: series.years, matrix: series.matrix };
   }
 
   function computeMonthlyRawTotal() {
@@ -1019,6 +1086,7 @@
     if (state.activeTab === 'monthly') renderMonthly();
     if (state.activeTab === 'cum') renderCum();
     if (state.activeTab === 'catyear') renderCatYear();
+    if (state.activeTab === 'usercat') renderUserCat();
     if (state.activeTab === 'daily') renderDaily();
     if (state.activeTab === 'ratio') renderRatio();
     if (state.activeTab === 'files') renderFiles();
@@ -1085,6 +1153,30 @@
     setCurrentTable(headers, rows);
   }
 
+  function renderUserCat() {
+    const result = computeMonthlyForUserCategories();
+    const datasets = [];
+    result.years.forEach((y, i) => datasets.push({ label: String(y), data: result.matrix[i], tension: 0.12 }));
+    renderChart('chartUserCat', MONTHS.map(m => m.slice(0,3)), datasets, ylabel());
+
+    const titleUser = result.user ? shortUserLabel(result.user) : 'sin usuario';
+    const catCount = result.cats.length;
+    $('userCatTitle').textContent = `Ventas mensuales — ${titleUser} — ${catCount} grupo(s)`;
+
+    if (!result.years.length) {
+      renderTable('tableUserCat', [], [], formatMetric);
+      setCurrentTable([], []);
+      return;
+    }
+
+    const headers = ['Mes', ...result.years.map(String)];
+    const rows = MONTHS.map((m, mi) => [m, ...result.matrix.map(arr => arr[mi])]);
+    rows.push(['TOTAL', ...result.matrix.map(arr => arr.reduce((a,b) => a + b, 0))]);
+
+    renderTable('tableUserCat', headers, rows, formatMetric);
+    setCurrentTable(headers, rows);
+  }
+
   function renderDaily() {
     const result = computeDaily();
     const base = $('showBase').checked ? computeDailyRaw() : null;
@@ -1107,13 +1199,9 @@
       });
       return row;
     });
-
-    // En la tabla diaria, las columnas impares son items y las pares son monto.
-    // Por eso no usamos formatMetric global acá: evitaría que "items" aparezca con $.
-    renderTable('tableDaily', headers, rows, true, (cell, colIndex) => {
-      if (colIndex === 0) return cell;
+    renderTable('tableDaily', headers, rows, (cell, colIndex, header) => {
       if (typeof cell !== 'number') return cell;
-      return colIndex % 2 === 1 ? formatInteger(cell) : formatCurrency(cell);
+      return String(header).toLowerCase().includes('items') ? formatNumber(cell, 0) : formatCurrency(cell);
     });
     setCurrentTable(headers, rows);
   }
@@ -1140,36 +1228,19 @@
 
   function renderRatio() {
     const result = computeRatio();
+    const toPercentSeries = arr => arr.map(v => v == null ? null : v * 100);
+    const chartTotal = result.yEmpty ? result.total : toPercentSeries(result.total);
+    const chartRatio = result.yEmpty ? result.ratio : result.ratio.map(toPercentSeries);
+    const yTitle = result.yEmpty ? ylabel() : 'Ratio (%)';
+
+    const datasets = [{ label: 'TOTAL', data: chartTotal, borderColor: '#737373', backgroundColor: '#737373', borderWidth: 2.2 }];
+    result.labels.forEach((label, i) => datasets.push({ label, data: chartRatio[i], tension: 0.1 }));
+    renderChart('chartRatio', MONTHS.map(m => m.slice(0,3)), datasets, yTitle);
+
     const headers = ['Usuario', ...MONTHS.map(m => m.slice(0,3))];
-
-    // Si Y está vacío, el panel muestra X como valor absoluto.
-    // Si hay X/Y, lo mostramos como porcentaje: ratio * 100 + "%".
-    if (result.yEmpty) {
-      const datasets = [{ label: 'TOTAL', data: result.total, borderColor: '#737373', backgroundColor: '#737373', borderWidth: 2.2 }];
-      result.labels.forEach((label, i) => datasets.push({ label, data: result.ratio[i], tension: 0.1 }));
-      renderChart('chartRatio', MONTHS.map(m => m.slice(0,3)), datasets, ylabel());
-      const rows = result.users.map((u, i) => [shortUserLabel(u), ...result.ratio[i]]);
-      renderTable('tableRatio', headers, rows, true);
-      setCurrentTable(headers, rows);
-      return;
-    }
-
-    const toPct = arr => arr.map(v => v == null || Number.isNaN(Number(v)) ? null : Number(v) * 100);
-    const totalPct = toPct(result.total);
-    const ratioPct = result.ratio.map(toPct);
-    const datasets = [{ label: 'TOTAL', data: totalPct, borderColor: '#737373', backgroundColor: '#737373', borderWidth: 2.2 }];
-    result.labels.forEach((label, i) => datasets.push({ label, data: ratioPct[i], tension: 0.1 }));
-    renderChart('chartRatio', MONTHS.map(m => m.slice(0,3)), datasets, 'Ratio (%)');
-
-    const rows = result.users.map((u, i) => [shortUserLabel(u), ...ratioPct[i]]);
-    renderTable('tableRatio', headers, rows, true, (cell, colIndex) => {
-      if (colIndex === 0) return cell;
-      return formatPercentValue(cell);
-    });
-
-    // Para copiar/CSV, dejamos también el símbolo % en la tabla de ratios.
-    const exportRows = rows.map(row => row.map((cell, colIndex) => colIndex === 0 ? cell : formatPercentValue(cell)));
-    setCurrentTable(headers, exportRows);
+    const rows = result.users.map((u, i) => [shortUserLabel(u), ...chartRatio[i]]);
+    renderTable('tableRatio', headers, rows, result.yEmpty ? formatMetric : (cell) => typeof cell === 'number' ? formatPercent(cell) : cell);
+    setCurrentTable(headers, rows);
   }
 
   function renderFiles() {
@@ -1194,15 +1265,18 @@
     });
   }
 
-  function renderTable(containerId, headers, rows, formatNumbers, customFormatter) {
+  function renderTable(containerId, headers, rows, formatter) {
     if (!headers.length) {
       $(containerId).innerHTML = '<div class="status" style="padding:12px;">No hay datos para mostrar.</div>';
       return;
     }
-    const html = `<table><thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map((cell, i) => {
-      const shown = customFormatter ? customFormatter(cell, i, row) : (formatNumbers && typeof cell === 'number' ? formatMetric(cell) : cell);
-      return `<td>${escapeHtml(shown)}</td>`;
-    }).join('')}</tr>`).join('')}</tbody></table>`;
+    const formatCell = (cell, i) => {
+      const header = headers[i] || '';
+      if (typeof formatter === 'function') return formatter(cell, i, header);
+      if (formatter && typeof cell === 'number') return formatMetric(cell);
+      return cell;
+    };
+    const html = `<table><thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map((cell, i) => `<td>${escapeHtml(formatCell(cell, i))}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     $(containerId).innerHTML = html;
   }
 
@@ -1219,30 +1293,29 @@
     return new Date(year, month, 0).getDate();
   }
 
+  function formatMetric(v) {
+    if (v == null || Number.isNaN(Number(v))) return '';
+    return $('metricMode').value === 'Monto' ? formatCurrency(v) : formatNumber(v, 0);
+  }
+
   function formatCurrency(v) {
     if (v == null || Number.isNaN(Number(v))) return '';
     return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(Number(v));
   }
 
-  function formatInteger(v) {
+  function formatNumber(v, digits = 0) {
     if (v == null || Number.isNaN(Number(v))) return '';
-    return new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0 }).format(Number(v));
+    return new Intl.NumberFormat('es-CL', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(Number(v));
   }
 
-  function formatPercentValue(v) {
+  function formatPercent(v) {
     if (v == null || Number.isNaN(Number(v))) return '';
-    return `${new Intl.NumberFormat('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(Number(v))}%`;
-  }
-
-  function formatMetric(v) {
-    if ($('metricMode').value === 'Monto') return formatCurrency(v);
-    return formatInteger(v);
+    return `${formatNumber(v, 1)}%`;
   }
 
   function formatMetricForTooltip(v, yTitle) {
     if (v == null || Number.isNaN(Number(v))) return '';
-    if (yTitle === 'Ratio (%)') return formatPercentValue(v);
-    if (yTitle === 'Ratio') return Number(v).toFixed(3);
+    if (yTitle === 'Ratio (%)') return formatPercent(v);
     return formatMetric(v);
   }
 
