@@ -353,6 +353,21 @@
             <button class="small" id="dailyDowNone">Ninguno</button>
           </div>
         </div>
+        <div class="side-section">
+          <h3>Preset diario</h3>
+          <p class="help">Carga aquí el mismo TXT diario que usabas antes. Esta tabla queda sincronizada con Configuración diario.</p>
+          <div class="button-row" style="margin-top: 8px;">
+            <button class="small" id="loadDailyPresetDailyTabBtn">Cargar preset diario</button>
+            <button class="small" id="saveDailyPresetDailyTabBtn">Guardar preset diario</button>
+          </div>
+          <div class="button-row" style="margin-top: 8px;">
+            <button class="small primary" id="applyDailyMappingDailyTab">Aplicar</button>
+            <button class="small" id="addDailyRowDailyTab">+ fila</button>
+            <button class="small" id="removeDailyRowDailyTab">- fila</button>
+          </div>
+          <div id="dailyMappingTableInline" class="table-wrap mapping-table" style="max-height: 260px; margin-top: 10px;"></div>
+          <div class="status" id="unassignedDailyInline">Grupos sin asignar diario: -</div>
+        </div>
       </aside>
       <div class="card chart-card">
         <div class="total-box"><div><div class="muted">Vista</div><div class="big">Ventas diarias</div></div><div class="button-row"><button id="copyDaily">Copiar Excel</button></div></div>
@@ -477,7 +492,7 @@
     renderDowCheckboxes('reportDow', state.reportDow, () => { readDow('reportDow', state.reportDow); refreshAll(); });
     renderDowCheckboxes('dailyDow', state.dailyDow, () => { readDow('dailyDow', state.dailyDow); refreshAll(); });
     renderMappingTable('reportMappingTable', state.reportMap);
-    renderMappingTable('dailyMappingTable', state.dailyMap);
+    renderDailyMappingTables();
     renderRatioTable('ratioXTable', state.ratioX);
     renderRatioTable('ratioYTable', state.ratioY);
     bindEvents();
@@ -546,12 +561,18 @@
     $('reportPresetFile').addEventListener('change', (e) => loadPresetFromInput(e, 'report'));
     $('saveReportPresetBtn').addEventListener('click', () => downloadText('preset_reporte.txt', presetToText(state.reportMap), 'text/plain'));
 
-    $('addDailyRow').addEventListener('click', () => { state.dailyMap.push({ cat: '', group: '', weight: 1 }); renderMappingTable('dailyMappingTable', state.dailyMap); });
-    $('removeDailyRow').addEventListener('click', () => { state.dailyMap.pop(); renderMappingTable('dailyMappingTable', state.dailyMap); });
-    $('applyDailyMapping').addEventListener('click', () => { state.dailyMap = readMappingTable('dailyMappingTable'); applyCategories('daily'); refreshAll(); });
+    $('addDailyRow').addEventListener('click', () => { state.dailyMap = readMappingTable('dailyMappingTable'); state.dailyMap.push({ cat: '', group: '', weight: 1 }); renderDailyMappingTables(); });
+    $('removeDailyRow').addEventListener('click', () => { state.dailyMap = readMappingTable('dailyMappingTable'); state.dailyMap.pop(); renderDailyMappingTables(); });
+    $('applyDailyMapping').addEventListener('click', () => applyDailyMappingFrom('dailyMappingTable'));
     $('loadDailyPresetBtn').addEventListener('click', () => $('dailyPresetFile').click());
     $('dailyPresetFile').addEventListener('change', (e) => loadPresetFromInput(e, 'daily'));
     $('saveDailyPresetBtn').addEventListener('click', () => downloadText('preset_diario.txt', presetToText(state.dailyMap), 'text/plain'));
+
+    $('addDailyRowDailyTab').addEventListener('click', () => { state.dailyMap = readMappingTable('dailyMappingTableInline'); state.dailyMap.push({ cat: '', group: '', weight: 1 }); renderDailyMappingTables(); });
+    $('removeDailyRowDailyTab').addEventListener('click', () => { state.dailyMap = readMappingTable('dailyMappingTableInline'); state.dailyMap.pop(); renderDailyMappingTables(); });
+    $('applyDailyMappingDailyTab').addEventListener('click', () => applyDailyMappingFrom('dailyMappingTableInline'));
+    $('loadDailyPresetDailyTabBtn').addEventListener('click', () => $('dailyPresetFile').click());
+    $('saveDailyPresetDailyTabBtn').addEventListener('click', () => downloadText('preset_diario.txt', presetToText(state.dailyMap), 'text/plain'));
 
     $('addRatioX').addEventListener('click', () => { state.ratioX.push({ group: '', weight: 1 }); renderRatioTable('ratioXTable', state.ratioX); });
     $('removeRatioX').addEventListener('click', () => { state.ratioX.pop(); renderRatioTable('ratioXTable', state.ratioX); });
@@ -843,7 +864,9 @@
 
   function readMappingTable(containerId) {
     const map = new Map();
-    $(containerId).querySelectorAll('input[data-map-row]').forEach(input => {
+    const el = $(containerId);
+    if (!el) return [];
+    el.querySelectorAll('input[data-map-row]').forEach(input => {
       const idx = Number(input.dataset.mapRow);
       if (!map.has(idx)) map.set(idx, { cat: '', group: '', weight: 1 });
       const row = map.get(idx);
@@ -854,6 +877,22 @@
       group: cleanText(r.group, ''),
       weight: Number.isFinite(Number(r.weight)) && Number(r.weight) >= 0 ? Number(r.weight) : 1
     })).filter(r => r.cat && r.group);
+  }
+
+  function renderMappingTableIfExists(containerId, rows) {
+    if ($(containerId)) renderMappingTable(containerId, rows);
+  }
+
+  function renderDailyMappingTables() {
+    renderMappingTableIfExists('dailyMappingTable', state.dailyMap);
+    renderMappingTableIfExists('dailyMappingTableInline', state.dailyMap);
+  }
+
+  function applyDailyMappingFrom(containerId) {
+    state.dailyMap = readMappingTable(containerId);
+    renderDailyMappingTables();
+    applyCategories('daily');
+    refreshAll();
   }
 
   function renderRatioTable(containerId, rows) {
@@ -1335,7 +1374,9 @@
     const unr = groups.filter(g => !reportGroups.has(g));
     const und = groups.filter(g => !dailyGroups.has(g));
     $('unassignedReport').textContent = `Grupos sin asignar (reporte): ${unr.length}${unr.length ? ' — ' + unr.slice(0, 12).join(', ') + (unr.length > 12 ? '...' : '') : ''}`;
-    $('unassignedDaily').textContent = `Grupos sin asignar diario: ${und.length}${und.length ? ' — ' + und.slice(0, 12).join(', ') + (und.length > 12 ? '...' : '') : ''}`;
+    const dailyMsg = `Grupos sin asignar diario: ${und.length}${und.length ? ' — ' + und.slice(0, 12).join(', ') + (und.length > 12 ? '...' : '') : ''}`;
+    $('unassignedDaily').textContent = dailyMsg;
+    if ($('unassignedDailyInline')) $('unassignedDailyInline').textContent = dailyMsg;
   }
 
   function setStatus(text) {
@@ -1363,7 +1404,7 @@
       applyCategories('report');
     } else {
       state.dailyMap = rows;
-      renderMappingTable('dailyMappingTable', state.dailyMap);
+      renderDailyMappingTables();
       applyCategories('daily');
     }
     refreshAll();
