@@ -601,7 +601,7 @@
     for (const file of files) {
       try {
         const buffer = await file.arrayBuffer();
-        const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+        const wb = XLSX.read(buffer, { type: 'array', cellDates: false });
         const sheetName = wb.SheetNames[0];
         const ws = wb.Sheets[sheetName];
         const json = XLSX.utils.sheet_to_json(ws, { defval: '', raw: true });
@@ -679,25 +679,47 @@
     return s || fallback;
   }
 
+  function makeLocalDateOnly(y, m, d) {
+    // Usamos mediodia local para evitar cambios de dia por zona horaria o DST.
+    return new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0, 0);
+  }
+
   function parseDate(value) {
-    if (value instanceof Date && !Number.isNaN(value.getTime())) {
-      return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-    }
+    // Excel numerico: convertir con SheetJS a y/m/d puro, sin Date UTC/local.
     if (typeof value === 'number' && window.XLSX && XLSX.SSF) {
       const d = XLSX.SSF.parse_date_code(value);
-      if (d) return new Date(d.y, d.m - 1, d.d);
+      if (d) return makeLocalDateOnly(d.y, d.m, d.d);
     }
+
+    // Si llega como Date, usar UTC evita que Excel midnight UTC caiga en el dia anterior en Chile.
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return makeLocalDateOnly(value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate());
+    }
+
     const s = String(value || '').trim();
     if (!s) return null;
-    const m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
+
+    // Formato chileno: dd/mm/yyyy o dd-mm-yyyy.
+    let m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
     if (m) {
       let y = Number(m[3]);
       if (y < 100) y += 2000;
-      const d = new Date(y, Number(m[2]) - 1, Number(m[1]));
+      const d = makeLocalDateOnly(y, Number(m[2]), Number(m[1]));
       if (!Number.isNaN(d.getTime())) return d;
     }
-    const d = new Date(s);
-    if (!Number.isNaN(d.getTime())) return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+    // Formato ISO: yyyy-mm-dd o yyyy/mm/dd. Lo parseamos manualmente para no usar Date.parse.
+    m = s.match(/^(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+    if (m) {
+      const d = makeLocalDateOnly(Number(m[1]), Number(m[2]), Number(m[3]));
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+
+    // Ultimo recurso: si el navegador entiende el texto, normalizamos con UTC.
+    const d0 = new Date(s);
+    if (!Number.isNaN(d0.getTime())) {
+      return makeLocalDateOnly(d0.getUTCFullYear(), d0.getUTCMonth() + 1, d0.getUTCDate());
+    }
     return null;
   }
 
